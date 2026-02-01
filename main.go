@@ -15,11 +15,45 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	envVarName     = "HYDRA_OVERRIDES"
-	overridesDir   = "$PROJECT_ROOT/conf/overrides"
-	projectEnvFile = ".envrc"
-)
+// Config holds application configuration loaded from ~/.config/lazyhydra/config.yaml
+type Config struct {
+	EnvVarName     string `yaml:"env_var_name"`
+	OverridesDir   string `yaml:"overrides_dir"`
+	ProjectEnvFile string `yaml:"project_env_file"`
+}
+
+// DefaultConfig returns the default configuration
+func DefaultConfig() *Config {
+	return &Config{
+		EnvVarName:     "HYDRA_OVERRIDES",
+		OverridesDir:   "$PROJECT_ROOT/conf/overrides",
+		ProjectEnvFile: ".envrc",
+	}
+}
+
+func loadConfig() (*Config, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return DefaultConfig(), nil
+	}
+
+	configPath := filepath.Join(home, ".config", "lazyhydra", "config.yaml")
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return DefaultConfig(), nil
+		}
+		return nil, fmt.Errorf("reading config: %w", err)
+	}
+
+	config := DefaultConfig()
+	if err := yaml.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	return config, nil
+}
 
 func init() {
 	// Set rounded borders globally
@@ -44,6 +78,7 @@ type Override struct {
 
 // App holds the application state
 type App struct {
+	config          *Config
 	app             *tview.Application
 	overrides       []*Override
 	applied         map[string]bool
@@ -59,7 +94,14 @@ type App struct {
 }
 
 func main() {
+	config, err := loadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
 	app := &App{
+		config:      config,
 		applied:     make(map[string]bool),
 		projectRoot: getProjectRoot(),
 	}
@@ -159,7 +201,7 @@ func expandPath(path string) string {
 }
 
 func (app *App) loadOverrides() error {
-	dir := expandPath(overridesDir)
+	dir := expandPath(app.config.OverridesDir)
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -218,7 +260,7 @@ func (app *App) loadOverrides() error {
 }
 
 func (app *App) loadPersistedState() error {
-	envrcPath := filepath.Join(app.projectRoot, projectEnvFile)
+	envrcPath := filepath.Join(app.projectRoot, app.config.ProjectEnvFile)
 
 	file, err := os.Open(envrcPath)
 	if err != nil {
@@ -232,8 +274,8 @@ func (app *App) loadPersistedState() error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "export "+envVarName+"=") {
-			value := strings.TrimPrefix(line, "export "+envVarName+"=")
+		if strings.HasPrefix(line, "export "+app.config.EnvVarName+"=") {
+			value := strings.TrimPrefix(line, "export "+app.config.EnvVarName+"=")
 			value = strings.Trim(value, "\"'")
 
 			if value == "" {
@@ -260,7 +302,7 @@ func (app *App) loadPersistedState() error {
 }
 
 func (app *App) savePersistedState() error {
-	envrcPath := filepath.Join(app.projectRoot, projectEnvFile)
+	envrcPath := filepath.Join(app.projectRoot, app.config.ProjectEnvFile)
 
 	var lines []string
 	existingFile, err := os.Open(envrcPath)
@@ -268,7 +310,7 @@ func (app *App) savePersistedState() error {
 		scanner := bufio.NewScanner(existingFile)
 		for scanner.Scan() {
 			line := scanner.Text()
-			if !strings.HasPrefix(line, "export "+envVarName+"=") &&
+			if !strings.HasPrefix(line, "export "+app.config.EnvVarName+"=") &&
 				!strings.HasPrefix(line, "export HYDRA_OVERRIDE_STR=") {
 				lines = append(lines, line)
 			}
@@ -285,7 +327,7 @@ func (app *App) savePersistedState() error {
 
 	if len(appliedNames) > 0 {
 		encoded := base64.StdEncoding.EncodeToString([]byte(strings.Join(appliedNames, ",")))
-		lines = append(lines, fmt.Sprintf("export %s=\"%s\"", envVarName, encoded))
+		lines = append(lines, fmt.Sprintf("export %s=\"%s\"", app.config.EnvVarName, encoded))
 	}
 
 	// Always write HYDRA_OVERRIDE_STR (empty string if no overrides)
