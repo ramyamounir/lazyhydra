@@ -526,18 +526,27 @@ func (app *App) prevPanel() {
 }
 
 func (app *App) updateBorderColors() {
+	// Lazygit-style blue selection color
+	selectionColor := tcell.NewRGBColor(106, 159, 181)
+
 	// Reset all borders to default
 	app.availableList.SetBorderColor(tcell.ColorDefault)
 	app.appliedList.SetBorderColor(tcell.ColorDefault)
 	app.infoView.SetBorderColor(tcell.ColorDefault)
 	app.contentView.SetBorderColor(tcell.ColorDefault)
 
-	// Highlight focused panel with green (lazygit style)
+	// Reset selection colors - unfocused lists don't show selection highlight
+	app.availableList.SetSelectedBackgroundColor(tcell.ColorDefault)
+	app.appliedList.SetSelectedBackgroundColor(tcell.ColorDefault)
+
+	// Highlight focused panel with green border and blue selection (lazygit style)
 	switch app.currentPanelIdx {
 	case 0:
 		app.availableList.SetBorderColor(tcell.ColorGreen)
+		app.availableList.SetSelectedBackgroundColor(selectionColor)
 	case 1:
 		app.appliedList.SetBorderColor(tcell.ColorGreen)
+		app.appliedList.SetSelectedBackgroundColor(selectionColor)
 	case 2:
 		app.infoView.SetBorderColor(tcell.ColorGreen)
 	}
