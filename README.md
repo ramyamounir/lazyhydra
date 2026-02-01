@@ -66,7 +66,11 @@ overrides/
 
 ### apply.md
 
-The `apply.md` file uses YAML frontmatter to define how the override is applied:
+The `apply.md` file uses YAML frontmatter to define how the override is applied. There are two ways to define overrides:
+
+#### Option 1: Custom Override (default)
+
+Use a local `override.yaml` file in the override folder:
 
 ```markdown
 ---
@@ -77,16 +81,37 @@ block: "experiment.config.logging"
 Optional documentation about what this override does.
 ```
 
+This generates: `+overrides/my_override@experiment.config.logging=override`
+
+#### Option 2: Existing Module
+
+Reference an existing configuration module elsewhere in your conf directory:
+
+```markdown
+---
+type: "+"
+block: "experiment.config.logging"
+module_path: "configs/logging"
+module: "debug"
+---
+
+Uses the existing debug logging configuration.
+```
+
+This generates: `+configs/logging@experiment.config.logging=debug`
+
 **Frontmatter fields:**
 
 | Field | Description |
 |-------|-------------|
 | `type` | `"+"` for merge or `"="` for replace |
 | `block` | The Hydra config path where this override applies |
+| `module_path` | (Optional) Path to the config module. Defaults to `overrides/[name]` |
+| `module` | (Optional) Module name to use. Defaults to `override` |
 
 ### override.yaml
 
-The `override.yaml` file contains the actual configuration values:
+The `override.yaml` file contains the actual configuration values. This file is only needed when using the default custom override approach (Option 1). When referencing an existing module with `module_path` and `module`, this file is not required.
 
 ```yaml
 log_level: DEBUG

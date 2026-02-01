@@ -106,6 +106,8 @@ type Override struct {
 	Type       string // "merge" or "replace"
 	Block      string // e.g., "test.config.logging"
 	File       string // e.g., "override.yaml"
+	ModulePath string // e.g., "overrides/my_override" or "configs/logging" (optional, defaults to "overrides/[name]")
+	Module     string // e.g., "override" or "custom_module" (optional, defaults to "override")
 	Content    string // content of override.yaml
 	ApplyInfo  string // content of apply.md
 	FolderPath string // full path to override folder
@@ -278,14 +280,18 @@ func (app *App) loadOverrides() error {
 			parts := strings.SplitN(content[3:], "---", 2)
 			if len(parts) >= 1 {
 				var meta struct {
-					Type  string `yaml:"type"`
-					Block string `yaml:"block"`
-					File  string `yaml:"file"`
+					Type       string `yaml:"type"`
+					Block      string `yaml:"block"`
+					File       string `yaml:"file"`
+					ModulePath string `yaml:"module_path"`
+					Module     string `yaml:"module"`
 				}
 				if err := yaml.Unmarshal([]byte(parts[0]), &meta); err == nil {
 					override.Type = meta.Type
 					override.Block = meta.Block
 					override.File = meta.File
+					override.ModulePath = meta.ModulePath
+					override.Module = meta.Module
 				}
 			}
 		}
@@ -398,9 +404,19 @@ func (app *App) buildOverrideString() string {
 			continue
 		}
 
-		// Format: [type]overrides/[name]@[block]=override
-		overrideStr := fmt.Sprintf("%soverrides/%s@%s=override",
-			o.Type, o.Name, o.Block)
+		// Use custom module_path/module if provided, otherwise use defaults
+		modulePath := o.ModulePath
+		if modulePath == "" {
+			modulePath = fmt.Sprintf("overrides/%s", o.Name)
+		}
+		module := o.Module
+		if module == "" {
+			module = "override"
+		}
+
+		// Format: [type][module_path]@[block]=[module]
+		overrideStr := fmt.Sprintf("%s%s@%s=%s",
+			o.Type, modulePath, o.Block, module)
 		parts = append(parts, overrideStr)
 	}
 
