@@ -130,7 +130,7 @@ lazyhydra
 
 | Key | Action |
 |-----|--------|
-| `1` `2` `3` | Jump to panel |
+| `1` `2` | Jump to panel |
 | `Tab` / `Shift+Tab` | Cycle panels |
 | `h` / `l` | Previous / Next panel |
 | `j` / `k` | Move down / up |

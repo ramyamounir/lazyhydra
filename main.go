@@ -141,7 +141,7 @@ Each override folder should contain:
   - apply.md          Metadata (type, block, file) in YAML frontmatter
 
 Keybindings in TUI:
-  1, 2, 3             Jump to panel
+  1, 2                Jump to panel
   Tab / Shift+Tab     Cycle panels
   h / l               Previous / Next panel
   j / k               Move cursor up / down
@@ -404,7 +404,7 @@ func (app *App) setupUI() {
 		SetDynamicColors(true).
 		SetWordWrap(true)
 	app.infoView.SetBorder(true).
-		SetTitle(" [3] Info ").
+		SetTitle(" Info ").
 		SetTitleAlign(tview.AlignLeft).
 		SetBorderColor(tcell.ColorDefault)
 
@@ -433,8 +433,8 @@ func (app *App) setupUI() {
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
 
-	// Store panels for navigation
-	app.panels = []tview.Primitive{app.availableList, app.appliedList, app.infoView}
+	// Store panels for navigation (only 1 and 2 are navigable)
+	app.panels = []tview.Primitive{app.availableList, app.appliedList}
 
 	// Left side panels (vertically stacked)
 	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -530,9 +530,6 @@ func (app *App) setupKeybindings() {
 				return nil
 			case '2':
 				app.focusPanel(1)
-				return nil
-			case '3':
-				app.focusPanel(2)
 				return nil
 			case 'h':
 				app.prevPanel()
@@ -671,8 +668,6 @@ func (app *App) updateBorderColors() {
 	case 1:
 		app.appliedList.SetBorderColor(tcell.ColorGreen)
 		app.appliedList.SetSelectedBackgroundColor(selectionColor)
-	case 2:
-		app.infoView.SetBorderColor(tcell.ColorGreen)
 	}
 }
 
@@ -904,7 +899,7 @@ func (app *App) updateContentAndInfo() {
 }
 
 func (app *App) updateStatusBar() {
-	app.statusBar.SetText(" [1-3] panels  [space/enter] toggle  [ n ] new  [ d ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
+	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ d ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
 }
 
 func (app *App) showHelp() {
@@ -915,7 +910,7 @@ func (app *App) showHelp() {
 		SetText(`[yellow::b]LazyHydra - Hydra Override Manager[-:-:-]
 
 [green]Navigation:[-]
-  1, 2, 3         Jump to panel
+  1, 2            Jump to panel
   Tab / Shift+Tab Cycle panels
   h / l           Prev / Next panel
   j / k / arrows  Move cursor
