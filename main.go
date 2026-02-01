@@ -78,23 +78,24 @@ type Override struct {
 
 // App holds the application state
 type App struct {
-	config          *Config
-	app             *tview.Application
-	overrides       []*Override
-	applied         map[string]bool
-	availableList   *tview.List
-	appliedList     *tview.List
-	infoView        *tview.TextView
-	contentView     *tview.TextView
-	statusBar       *tview.TextView
-	panels          []tview.Primitive
-	currentPanelIdx int
-	projectRoot     string
-	helpOpen        bool
-	inputOpen       bool
-	deleteOpen      bool
-	renameOpen      bool
-	renameTarget    *Override
+	config            *Config
+	app               *tview.Application
+	overrides         []*Override
+	applied           map[string]bool
+	availableList     *tview.List
+	appliedList       *tview.List
+	infoView          *tview.TextView
+	contentView       *tview.TextView
+	overrideStringView *tview.TextView
+	statusBar         *tview.TextView
+	panels            []tview.Primitive
+	currentPanelIdx   int
+	projectRoot       string
+	helpOpen          bool
+	inputOpen         bool
+	deleteOpen        bool
+	renameOpen        bool
+	renameTarget      *Override
 }
 
 func main() {
@@ -367,7 +368,7 @@ func (app *App) buildOverrideString() string {
 		parts = append(parts, overrideStr)
 	}
 
-	return strings.Join(parts, " ")
+	return strings.Join(parts, "\n")
 }
 
 func (app *App) setupUI() {
@@ -417,6 +418,16 @@ func (app *App) setupUI() {
 		SetTitleAlign(tview.AlignLeft).
 		SetBorderColor(tcell.ColorDefault)
 
+	// Create Override String view
+	app.overrideStringView = tview.NewTextView().
+		SetDynamicColors(true).
+		SetWordWrap(true).
+		SetScrollable(true)
+	app.overrideStringView.SetBorder(true).
+		SetTitle(" Override String ").
+		SetTitleAlign(tview.AlignLeft).
+		SetBorderColor(tcell.ColorDefault)
+
 	// Create Status bar
 	app.statusBar = tview.NewTextView().
 		SetDynamicColors(true).
@@ -431,10 +442,15 @@ func (app *App) setupUI() {
 		AddItem(app.appliedList, 0, 1, false).
 		AddItem(app.infoView, 0, 1, false)
 
-	// Main layout (horizontal: left panels | content)
+	// Right side panels (vertically stacked: content, override string)
+	rightFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(app.contentView, 0, 6, true).
+		AddItem(app.overrideStringView, 0, 1, false)
+
+	// Main layout (horizontal: left panels | right panels)
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(leftFlex, 0, 2, true).
-		AddItem(app.contentView, 0, 3, false)
+		AddItem(rightFlex, 0, 3, false)
 
 	// Root layout with status bar
 	rootFlex := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -641,6 +657,7 @@ func (app *App) updateBorderColors() {
 	app.appliedList.SetBorderColor(tcell.ColorDefault)
 	app.infoView.SetBorderColor(tcell.ColorDefault)
 	app.contentView.SetBorderColor(tcell.ColorDefault)
+	app.overrideStringView.SetBorderColor(tcell.ColorDefault)
 
 	// Reset selection colors - unfocused lists don't show selection highlight
 	app.availableList.SetSelectedBackgroundColor(tcell.ColorDefault)
@@ -864,16 +881,13 @@ func (app *App) updateContentAndInfo() {
 		app.infoView.SetText(info)
 	}
 
-	// Add override syntax to info panel
+	// Update override string view
 	overrideStr := app.buildOverrideString()
+	app.overrideStringView.Clear()
 	if overrideStr != "" {
-		currentText := app.infoView.GetText(false)
-		app.infoView.SetText(currentText + "\n\n[white::b]Override String:[-:-:-]\n" + overrideStr)
-	} else if selected == nil {
-		app.infoView.SetText("No override selected\n\n[white::b]Override String:[-:-:-]\n(no overrides applied)")
+		app.overrideStringView.SetText(overrideStr)
 	} else {
-		currentText := app.infoView.GetText(false)
-		app.infoView.SetText(currentText + "\n\n[white::b]Override String:[-:-:-]\n(no overrides applied)")
+		app.overrideStringView.SetText("(no overrides applied)")
 	}
 
 	// Update content view
@@ -1194,9 +1208,13 @@ func (app *App) buildRootLayout() tview.Primitive {
 		AddItem(app.appliedList, 0, 1, false).
 		AddItem(app.infoView, 0, 1, false)
 
+	rightFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(app.contentView, 0, 6, true).
+		AddItem(app.overrideStringView, 0, 1, false)
+
 	mainFlex := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(leftFlex, 0, 2, true).
-		AddItem(app.contentView, 0, 3, false)
+		AddItem(rightFlex, 0, 3, false)
 
 	return tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(mainFlex, 0, 1, true).
