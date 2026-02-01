@@ -91,6 +91,7 @@ type App struct {
 	currentPanelIdx int
 	projectRoot     string
 	helpOpen        bool
+	inputOpen       bool
 }
 
 func main() {
@@ -141,6 +142,7 @@ Keybindings in TUI:
   h / l               Previous / Next panel
   j / k               Move cursor up / down
   Space / Enter       Apply or remove override
+  n                   Create new override
   e                   Edit apply.md in $EDITOR
   E                   Edit override.yaml in $EDITOR
   ?                   Show help
@@ -464,6 +466,15 @@ func (app *App) setupKeybindings() {
 			return event
 		}
 
+		// If input is open, close it on Escape
+		if app.inputOpen {
+			if event.Key() == tcell.KeyEsc {
+				app.closeInput()
+				return nil
+			}
+			return event
+		}
+
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
@@ -502,6 +513,9 @@ func (app *App) setupKeybindings() {
 				return nil
 			case 'E':
 				app.openInEditor("override.yaml")
+				return nil
+			case 'n':
+				app.showNewOverrideInput()
 				return nil
 			}
 		case tcell.KeyTab:
@@ -835,7 +849,7 @@ func (app *App) updateStatusBar() {
 		overrideStr = "(no overrides applied)"
 	}
 
-	status := fmt.Sprintf(" [yellow]Overrides:[-] %s [darkgray]| [1-3] panels  [space/enter] toggle  [q] quit  [?] help[-]", overrideStr)
+	status := fmt.Sprintf(" [yellow]Overrides:[-] %s [darkgray]| [1-3] panels  [space/enter] toggle  [n] new  [q] quit  [?] help[-]", overrideStr)
 	app.statusBar.SetText(status)
 }
 
@@ -854,6 +868,7 @@ func (app *App) showHelp() {
 
 [green]Actions:[-]
   Space / Enter   Apply/Remove override
+  n               New override
   e               Edit apply.md
   E               Edit override.yaml
   q               Quit
@@ -892,6 +907,89 @@ func (app *App) closeHelp() {
 	app.app.SetRoot(app.buildRootLayout(), true)
 	app.app.SetFocus(app.panels[app.currentPanelIdx])
 	app.updateBorderColors()
+}
+
+func (app *App) showNewOverrideInput() {
+	app.inputOpen = true
+
+	inputField := tview.NewInputField().
+		SetLabel("Override name: ").
+		SetFieldWidth(40).
+		SetFieldBackgroundColor(tcell.ColorDefault)
+
+	inputField.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			name := strings.TrimSpace(inputField.GetText())
+			if name != "" {
+				app.createNewOverride(name)
+			}
+		}
+		app.closeInput()
+	})
+
+	inputField.SetBorder(true).
+		SetTitle(" New Override ").
+		SetTitleAlign(tview.AlignCenter).
+		SetBorderColor(tcell.ColorGreen)
+
+	// Center the input box
+	flex := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(inputField, 3, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	app.app.SetRoot(flex, true)
+	app.app.SetFocus(inputField)
+}
+
+func (app *App) closeInput() {
+	app.inputOpen = false
+	app.app.SetRoot(app.buildRootLayout(), true)
+	app.app.SetFocus(app.panels[app.currentPanelIdx])
+	app.updateBorderColors()
+}
+
+func (app *App) createNewOverride(name string) {
+	dir := expandPath(app.config.OverridesDir)
+	overridePath := filepath.Join(dir, name)
+
+	// Create the folder
+	if err := os.MkdirAll(overridePath, 0755); err != nil {
+		return
+	}
+
+	// Create empty override.yaml
+	overrideYAMLPath := filepath.Join(overridePath, "override.yaml")
+	os.WriteFile(overrideYAMLPath, []byte{}, 0644)
+
+	// Create template apply.md
+	applyPath := filepath.Join(overridePath, "apply.md")
+	applyContent := `---
+type: ""
+block: ""
+---
+`
+	os.WriteFile(applyPath, []byte(applyContent), 0644)
+
+	// Add the new override to the list
+	override := &Override{
+		Name:       name,
+		Type:       "",
+		Block:      "",
+		FolderPath: overridePath,
+		ApplyInfo:  applyContent,
+	}
+	app.overrides = append(app.overrides, override)
+
+	// Re-sort overrides
+	sort.Slice(app.overrides, func(i, j int) bool {
+		return app.overrides[i].Name < app.overrides[j].Name
+	})
+
+	app.refreshAll()
 }
 
 func (app *App) buildRootLayout() tview.Primitive {
