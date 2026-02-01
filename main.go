@@ -92,6 +92,7 @@ type App struct {
 	projectRoot     string
 	helpOpen        bool
 	inputOpen       bool
+	deleteOpen      bool
 }
 
 func main() {
@@ -143,6 +144,7 @@ Keybindings in TUI:
   j / k               Move cursor up / down
   Space / Enter       Apply or remove override
   n                   Create new override
+  d                   Delete override
   e                   Edit apply.md in $EDITOR
   E                   Edit override.yaml in $EDITOR
   ?                   Show help
@@ -475,6 +477,20 @@ func (app *App) setupKeybindings() {
 			return event
 		}
 
+		// If delete confirmation is open, handle it
+		if app.deleteOpen {
+			if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
+				app.closeDeleteConfirmation()
+				return nil
+			}
+			if event.Key() == tcell.KeyEnter {
+				app.deleteSelectedOverride()
+				app.closeDeleteConfirmation()
+				return nil
+			}
+			return event
+		}
+
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
@@ -516,6 +532,9 @@ func (app *App) setupKeybindings() {
 				return nil
 			case 'n':
 				app.showNewOverrideInput()
+				return nil
+			case 'd':
+				app.showDeleteConfirmation()
 				return nil
 			}
 		case tcell.KeyTab:
@@ -849,7 +868,7 @@ func (app *App) updateStatusBar() {
 		overrideStr = "(no overrides applied)"
 	}
 
-	status := fmt.Sprintf(" [yellow]Overrides:[-] %s [darkgray]| [1-3] panels  [space/enter] toggle  [n] new  [q] quit  [?] help[-]", overrideStr)
+	status := fmt.Sprintf(" [yellow]Overrides:[-] %s [darkgray]| [1-3] panels  [space/enter] toggle  [n] new  [d] delete  [q] quit  [?] help[-]", overrideStr)
 	app.statusBar.SetText(status)
 }
 
@@ -869,6 +888,7 @@ func (app *App) showHelp() {
 [green]Actions:[-]
   Space / Enter   Apply/Remove override
   n               New override
+  d               Delete override
   e               Edit apply.md
   E               Edit override.yaml
   q               Quit
@@ -894,7 +914,7 @@ func (app *App) showHelp() {
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
 			AddItem(nil, 0, 1, false).
-			AddItem(helpText, 22, 0, true).
+			AddItem(helpText, 23, 0, true).
 			AddItem(nil, 0, 1, false), 60, 0, true).
 		AddItem(nil, 0, 1, false)
 
@@ -950,6 +970,75 @@ func (app *App) closeInput() {
 	app.app.SetRoot(app.buildRootLayout(), true)
 	app.app.SetFocus(app.panels[app.currentPanelIdx])
 	app.updateBorderColors()
+}
+
+func (app *App) showDeleteConfirmation() {
+	selected := app.getSelectedOverride()
+	if selected == nil {
+		return
+	}
+
+	app.deleteOpen = true
+
+	confirmText := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter).
+		SetText(fmt.Sprintf(`[yellow::b]Delete Override[-:-:-]
+
+Are you sure you want to delete "[red]%s[-]"?
+
+This will permanently remove the override folder.
+
+[green]Enter[-] to confirm    [yellow]Esc/q[-] to cancel`, selected.Name))
+
+	confirmText.SetBorder(true).
+		SetTitle(" Confirm Delete ").
+		SetTitleAlign(tview.AlignCenter).
+		SetBorderColor(tcell.ColorRed)
+
+	// Center the confirmation box
+	flex := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(confirmText, 11, 0, true).
+			AddItem(nil, 0, 1, false), 55, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	app.app.SetRoot(flex, true)
+	app.app.SetFocus(confirmText)
+}
+
+func (app *App) closeDeleteConfirmation() {
+	app.deleteOpen = false
+	app.app.SetRoot(app.buildRootLayout(), true)
+	app.app.SetFocus(app.panels[app.currentPanelIdx])
+	app.updateBorderColors()
+}
+
+func (app *App) deleteSelectedOverride() {
+	selected := app.getSelectedOverride()
+	if selected == nil {
+		return
+	}
+
+	// Remove from applied if it was applied
+	delete(app.applied, selected.Name)
+
+	// Remove from overrides list
+	for i, o := range app.overrides {
+		if o.Name == selected.Name {
+			app.overrides = append(app.overrides[:i], app.overrides[i+1:]...)
+			break
+		}
+	}
+
+	// Delete the folder from disk
+	os.RemoveAll(selected.FolderPath)
+
+	// Save state and refresh
+	app.savePersistedState()
+	app.refreshAll()
 }
 
 func (app *App) createNewOverride(name string) {

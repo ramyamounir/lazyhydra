@@ -135,6 +135,8 @@ lazyhydra
 | `h` / `l` | Previous / Next panel |
 | `j` / `k` | Move down / up |
 | `Space` / `Enter` | Toggle override (apply or remove) |
+| `n` | Create new override |
+| `d` | Delete override (with confirmation) |
 | `e` | Edit `apply.md` in `$EDITOR` |
 | `E` | Edit `override.yaml` in `$EDITOR` |
 | `?` | Show help |
