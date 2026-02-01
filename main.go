@@ -341,7 +341,8 @@ func (app *App) savePersistedState() error {
 	}
 
 	// Always write HYDRA_OVERRIDE_STR (empty string if no overrides)
-	overrideStr := app.buildOverrideString()
+	// Join with spaces for .envrc (display uses newlines for readability)
+	overrideStr := strings.ReplaceAll(app.buildOverrideString(), "\n", " ")
 	lines = append(lines, fmt.Sprintf("export HYDRA_OVERRIDE_STR=\"%s\"", overrideStr))
 
 	if err := os.WriteFile(envrcPath, []byte(strings.Join(lines, "\n")+"\n"), 0644); err != nil {
@@ -438,8 +439,8 @@ func (app *App) setupUI() {
 
 	// Left side panels (vertically stacked)
 	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(app.availableList, 0, 1, true).
-		AddItem(app.appliedList, 0, 1, false).
+		AddItem(app.availableList, 0, 3, true).
+		AddItem(app.appliedList, 0, 3, false).
 		AddItem(app.infoView, 0, 1, false)
 
 	// Right side panels (vertically stacked: content, override string)
@@ -1199,8 +1200,8 @@ block: ""
 
 func (app *App) buildRootLayout() tview.Primitive {
 	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(app.availableList, 0, 1, true).
-		AddItem(app.appliedList, 0, 1, false).
+		AddItem(app.availableList, 0, 3, true).
+		AddItem(app.appliedList, 0, 3, false).
 		AddItem(app.infoView, 0, 1, false)
 
 	rightFlex := tview.NewFlex().SetDirection(tview.FlexRow).
