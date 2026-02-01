@@ -137,6 +137,7 @@ lazyhydra
 | `Space` / `Enter` | Toggle override (apply or remove) |
 | `n` | Create new override |
 | `d` | Delete override (with confirmation) |
+| `r` | Rename override |
 | `e` | Edit `apply.md` in `$EDITOR` |
 | `E` | Edit `override.yaml` in `$EDITOR` |
 | `?` | Show help |

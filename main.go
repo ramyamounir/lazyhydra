@@ -93,6 +93,8 @@ type App struct {
 	helpOpen        bool
 	inputOpen       bool
 	deleteOpen      bool
+	renameOpen      bool
+	renameTarget    *Override
 }
 
 func main() {
@@ -145,6 +147,7 @@ Keybindings in TUI:
   Space / Enter       Apply or remove override
   n                   Create new override
   d                   Delete override
+  r                   Rename override
   e                   Edit apply.md in $EDITOR
   E                   Edit override.yaml in $EDITOR
   ?                   Show help
@@ -491,6 +494,15 @@ func (app *App) setupKeybindings() {
 			return event
 		}
 
+		// If rename input is open, close it on Escape
+		if app.renameOpen {
+			if event.Key() == tcell.KeyEsc {
+				app.closeRenameInput()
+				return nil
+			}
+			return event
+		}
+
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
@@ -535,6 +547,9 @@ func (app *App) setupKeybindings() {
 				return nil
 			case 'd':
 				app.showDeleteConfirmation()
+				return nil
+			case 'r':
+				app.showRenameInput()
 				return nil
 			}
 		case tcell.KeyTab:
@@ -868,7 +883,7 @@ func (app *App) updateStatusBar() {
 		overrideStr = "(no overrides applied)"
 	}
 
-	status := fmt.Sprintf(" [yellow]Overrides:[-] %s [darkgray]| [1-3] panels  [space/enter] toggle  [n] new  [d] delete  [q] quit  [?] help[-]", overrideStr)
+	status := fmt.Sprintf(" [yellow]Overrides:[-] %s [darkgray]| [1-3] panels  [space/enter] toggle  [n] new  [d] delete  [r] rename  [q] quit  [?] help[-]", overrideStr)
 	app.statusBar.SetText(status)
 }
 
@@ -889,6 +904,7 @@ func (app *App) showHelp() {
   Space / Enter   Apply/Remove override
   n               New override
   d               Delete override
+  r               Rename override
   e               Edit apply.md
   E               Edit override.yaml
   q               Quit
@@ -1035,6 +1051,91 @@ func (app *App) deleteSelectedOverride() {
 
 	// Delete the folder from disk
 	os.RemoveAll(selected.FolderPath)
+
+	// Save state and refresh
+	app.savePersistedState()
+	app.refreshAll()
+}
+
+func (app *App) showRenameInput() {
+	selected := app.getSelectedOverride()
+	if selected == nil {
+		return
+	}
+
+	app.renameOpen = true
+	app.renameTarget = selected
+
+	inputField := tview.NewInputField().
+		SetLabel("New name: ").
+		SetText(selected.Name).
+		SetFieldWidth(40).
+		SetFieldBackgroundColor(tcell.ColorDefault)
+
+	inputField.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			newName := strings.TrimSpace(inputField.GetText())
+			if newName != "" && newName != app.renameTarget.Name {
+				app.renameSelectedOverride(newName)
+			}
+		}
+		app.closeRenameInput()
+	})
+
+	inputField.SetBorder(true).
+		SetTitle(fmt.Sprintf(" Rename: %s ", selected.Name)).
+		SetTitleAlign(tview.AlignCenter).
+		SetBorderColor(tcell.ColorGreen)
+
+	// Center the input box
+	flex := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(inputField, 3, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	app.app.SetRoot(flex, true)
+	app.app.SetFocus(inputField)
+}
+
+func (app *App) closeRenameInput() {
+	app.renameOpen = false
+	app.renameTarget = nil
+	app.app.SetRoot(app.buildRootLayout(), true)
+	app.app.SetFocus(app.panels[app.currentPanelIdx])
+	app.updateBorderColors()
+}
+
+func (app *App) renameSelectedOverride(newName string) {
+	if app.renameTarget == nil {
+		return
+	}
+
+	oldName := app.renameTarget.Name
+	oldPath := app.renameTarget.FolderPath
+	newPath := filepath.Join(filepath.Dir(oldPath), newName)
+
+	// Rename the folder on disk
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return
+	}
+
+	// Update the override in memory
+	app.renameTarget.Name = newName
+	app.renameTarget.FolderPath = newPath
+
+	// Update applied map if this override was applied
+	if app.applied[oldName] {
+		delete(app.applied, oldName)
+		app.applied[newName] = true
+	}
+
+	// Re-sort overrides
+	sort.Slice(app.overrides, func(i, j int) bool {
+		return app.overrides[i].Name < app.overrides[j].Name
+	})
 
 	// Save state and refresh
 	app.savePersistedState()
