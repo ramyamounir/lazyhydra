@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 const (
 	envVarName     = "HYDRA_OVERRIDES"
-	overridesDir   = "~/.config/tbp/overrides"
+	overridesDir   = "$PROJECT_ROOT/conf/overrides"
 	projectEnvFile = ".envrc"
 )
 
@@ -146,6 +147,13 @@ func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, path[2:])
+	}
+	if strings.HasPrefix(path, "$PROJECT_ROOT") {
+		root := os.Getenv("PROJECT_ROOT")
+		if root == "" {
+			root, _ = os.Getwd()
+		}
+		return filepath.Join(root, path[len("$PROJECT_ROOT"):])
 	}
 	return path
 }
@@ -283,7 +291,14 @@ func (app *App) savePersistedState() error {
 		lines = append(lines, fmt.Sprintf("export HYDRA_OVERRIDE_STR=\"%s\"", overrideStr))
 	}
 
-	return os.WriteFile(envrcPath, []byte(strings.Join(lines, "\n")+"\n"), 0644)
+	if err := os.WriteFile(envrcPath, []byte(strings.Join(lines, "\n")+"\n"), 0644); err != nil {
+		return err
+	}
+
+	// Run direnv allow so changes take effect immediately
+	cmd := exec.Command("direnv", "allow", app.projectRoot)
+	cmd.Dir = app.projectRoot
+	return cmd.Run()
 }
 
 func (app *App) buildOverrideString() string {
