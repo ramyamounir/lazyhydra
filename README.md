@@ -134,6 +134,7 @@ lazyhydra
 | `Tab` / `Shift+Tab` | Cycle panels |
 | `h` / `l` | Previous / Next panel |
 | `j` / `k` | Move down / up |
+| `J` / `K` | Scroll content view |
 | `Space` / `Enter` | Toggle override (apply or remove) |
 | `n` | Create new override |
 | `d` | Delete override (with confirmation) |

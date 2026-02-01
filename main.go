@@ -538,6 +538,12 @@ func (app *App) setupKeybindings() {
 			case 'k':
 				app.cursorUp()
 				return nil
+			case 'J':
+				app.scrollContentDown()
+				return nil
+			case 'K':
+				app.scrollContentUp()
+				return nil
 			case ' ':
 				app.toggleOverride()
 				return nil
@@ -615,6 +621,18 @@ func (app *App) cursorUp() {
 		}
 	}
 	app.updateContentAndInfo()
+}
+
+func (app *App) scrollContentDown() {
+	row, col := app.contentView.GetScrollOffset()
+	app.contentView.ScrollTo(row+1, col)
+}
+
+func (app *App) scrollContentUp() {
+	row, col := app.contentView.GetScrollOffset()
+	if row > 0 {
+		app.contentView.ScrollTo(row-1, col)
+	}
 }
 
 func (app *App) focusPanel(idx int) {
@@ -905,6 +923,7 @@ func (app *App) showHelp() {
   Tab / Shift+Tab Cycle panels
   h / l           Prev / Next panel
   j / k / arrows  Move cursor
+  J / K           Scroll content view
 
 [green]Actions:[-]
   Space / Enter   Apply/Remove override
