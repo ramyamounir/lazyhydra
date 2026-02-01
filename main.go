@@ -80,6 +80,7 @@ type Override struct {
 type App struct {
 	config            *Config
 	app               *tview.Application
+	pages             *tview.Pages
 	overrides         []*Override
 	applied           map[string]bool
 	availableList     *tview.List
@@ -474,7 +475,11 @@ func (app *App) setupUI() {
 	app.app.SetFocus(app.availableList)
 	app.updateBorderColors()
 
-	app.app.SetRoot(rootFlex, true)
+	// Create pages for overlay support
+	app.pages = tview.NewPages().
+		AddPage("main", rootFlex, true, true)
+
+	app.app.SetRoot(app.pages, true)
 }
 
 func (app *App) setupKeybindings() {
@@ -903,6 +908,17 @@ func (app *App) updateStatusBar() {
 	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ d ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
 }
 
+// modal creates a centered modal overlay that shows the background through transparent areas
+func modal(content tview.Primitive, width, height int) tview.Primitive {
+	return tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(content, height, 0, true).
+			AddItem(nil, 0, 1, false), width, 0, true).
+		AddItem(nil, 0, 1, false)
+}
+
 func (app *App) showHelp() {
 	app.helpOpen = true
 
@@ -941,22 +957,13 @@ func (app *App) showHelp() {
 		SetTitleAlign(tview.AlignCenter).
 		SetBorderColor(tcell.ColorGreen)
 
-	// Center the help box
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(helpText, 23, 0, true).
-			AddItem(nil, 0, 1, false), 60, 0, true).
-		AddItem(nil, 0, 1, false)
-
-	app.app.SetRoot(flex, true)
+	app.pages.AddPage("help", modal(helpText, 60, 23), true, true)
 	app.app.SetFocus(helpText)
 }
 
 func (app *App) closeHelp() {
 	app.helpOpen = false
-	app.app.SetRoot(app.buildRootLayout(), true)
+	app.pages.RemovePage("help")
 	app.app.SetFocus(app.panels[app.currentPanelIdx])
 	app.updateBorderColors()
 }
@@ -984,22 +991,13 @@ func (app *App) showNewOverrideInput() {
 		SetTitleAlign(tview.AlignCenter).
 		SetBorderColor(tcell.ColorGreen)
 
-	// Center the input box
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(inputField, 3, 0, true).
-			AddItem(nil, 0, 1, false), 60, 0, true).
-		AddItem(nil, 0, 1, false)
-
-	app.app.SetRoot(flex, true)
+	app.pages.AddPage("input", modal(inputField, 60, 3), true, true)
 	app.app.SetFocus(inputField)
 }
 
 func (app *App) closeInput() {
 	app.inputOpen = false
-	app.app.SetRoot(app.buildRootLayout(), true)
+	app.pages.RemovePage("input")
 	app.app.SetFocus(app.panels[app.currentPanelIdx])
 	app.updateBorderColors()
 }
@@ -1028,22 +1026,13 @@ This will permanently remove the override folder.
 		SetTitleAlign(tview.AlignCenter).
 		SetBorderColor(tcell.ColorRed)
 
-	// Center the confirmation box
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(confirmText, 11, 0, true).
-			AddItem(nil, 0, 1, false), 55, 0, true).
-		AddItem(nil, 0, 1, false)
-
-	app.app.SetRoot(flex, true)
+	app.pages.AddPage("delete", modal(confirmText, 55, 11), true, true)
 	app.app.SetFocus(confirmText)
 }
 
 func (app *App) closeDeleteConfirmation() {
 	app.deleteOpen = false
-	app.app.SetRoot(app.buildRootLayout(), true)
+	app.pages.RemovePage("delete")
 	app.app.SetFocus(app.panels[app.currentPanelIdx])
 	app.updateBorderColors()
 }
@@ -1103,23 +1092,14 @@ func (app *App) showRenameInput() {
 		SetTitleAlign(tview.AlignCenter).
 		SetBorderColor(tcell.ColorGreen)
 
-	// Center the input box
-	flex := tview.NewFlex().
-		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(inputField, 3, 0, true).
-			AddItem(nil, 0, 1, false), 60, 0, true).
-		AddItem(nil, 0, 1, false)
-
-	app.app.SetRoot(flex, true)
+	app.pages.AddPage("rename", modal(inputField, 60, 3), true, true)
 	app.app.SetFocus(inputField)
 }
 
 func (app *App) closeRenameInput() {
 	app.renameOpen = false
 	app.renameTarget = nil
-	app.app.SetRoot(app.buildRootLayout(), true)
+	app.pages.RemovePage("rename")
 	app.app.SetFocus(app.panels[app.currentPanelIdx])
 	app.updateBorderColors()
 }
@@ -1198,21 +1178,3 @@ block: ""
 	app.refreshAll()
 }
 
-func (app *App) buildRootLayout() tview.Primitive {
-	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(app.availableList, 0, 3, true).
-		AddItem(app.appliedList, 0, 3, false).
-		AddItem(app.infoView, 0, 1, false)
-
-	rightFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(app.contentView, 0, 6, true).
-		AddItem(app.overrideStringView, 0, 1, false)
-
-	mainFlex := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(leftFlex, 0, 2, true).
-		AddItem(rightFlex, 0, 3, false)
-
-	return tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(mainFlex, 0, 1, true).
-		AddItem(app.statusBar, 1, 0, false)
-}
