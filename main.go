@@ -409,6 +409,12 @@ func (app *App) setupKeybindings() {
 			case 'l':
 				app.nextPanel()
 				return nil
+			case 'j':
+				app.cursorDown()
+				return nil
+			case 'k':
+				app.cursorUp()
+				return nil
 			case ' ':
 				app.toggleOverride()
 				return nil
@@ -437,6 +443,40 @@ func (app *App) setupKeybindings() {
 		}
 		return event
 	})
+}
+
+func (app *App) cursorDown() {
+	switch app.currentPanelIdx {
+	case 0:
+		count := app.availableList.GetItemCount()
+		current := app.availableList.GetCurrentItem()
+		if current < count-1 {
+			app.availableList.SetCurrentItem(current + 1)
+		}
+	case 1:
+		count := app.appliedList.GetItemCount()
+		current := app.appliedList.GetCurrentItem()
+		if current < count-1 {
+			app.appliedList.SetCurrentItem(current + 1)
+		}
+	}
+	app.updateContentAndInfo()
+}
+
+func (app *App) cursorUp() {
+	switch app.currentPanelIdx {
+	case 0:
+		current := app.availableList.GetCurrentItem()
+		if current > 0 {
+			app.availableList.SetCurrentItem(current - 1)
+		}
+	case 1:
+		current := app.appliedList.GetCurrentItem()
+		if current > 0 {
+			app.appliedList.SetCurrentItem(current - 1)
+		}
+	}
+	app.updateContentAndInfo()
 }
 
 func (app *App) focusPanel(idx int) {
