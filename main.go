@@ -20,6 +20,16 @@ const (
 	projectEnvFile = ".envrc"
 )
 
+func init() {
+	// Set rounded borders globally (lazygit style)
+	tview.Borders.Horizontal = '─'
+	tview.Borders.Vertical = '│'
+	tview.Borders.TopLeft = '╭'
+	tview.Borders.TopRight = '╮'
+	tview.Borders.BottomLeft = '╰'
+	tview.Borders.BottomRight = '╯'
+}
+
 // Override represents a single Hydra override configuration
 type Override struct {
 	Name       string
@@ -303,11 +313,14 @@ func (app *App) buildOverrideString() string {
 func (app *App) setupUI() {
 	app.app = tview.NewApplication()
 
+	// Lazygit-style blue selection color: #6a9fb5
+	selectionColor := tcell.NewRGBColor(106, 159, 181)
+
 	// Create Available Overrides list
 	app.availableList = tview.NewList().
 		ShowSecondaryText(false).
 		SetHighlightFullLine(true).
-		SetSelectedBackgroundColor(tcell.ColorDarkBlue).
+		SetSelectedBackgroundColor(selectionColor).
 		SetSelectedTextColor(tcell.ColorWhite)
 	app.availableList.SetBorder(true).
 		SetTitle(" [1] Available Overrides ").
@@ -318,7 +331,7 @@ func (app *App) setupUI() {
 	app.appliedList = tview.NewList().
 		ShowSecondaryText(false).
 		SetHighlightFullLine(true).
-		SetSelectedBackgroundColor(tcell.ColorDarkBlue).
+		SetSelectedBackgroundColor(selectionColor).
 		SetSelectedTextColor(tcell.ColorWhite)
 	app.appliedList.SetBorder(true).
 		SetTitle(" [2] Applied Overrides ").

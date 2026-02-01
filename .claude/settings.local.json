@@ -2,6 +2,9 @@
   "permissions": {
     "additionalDirectories": [
       "/home/ramy/downloads/lazygit"
+    ],
+    "allow": [
+      "Bash(go doc:*)"
     ]
   }
 }
