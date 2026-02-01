@@ -184,7 +184,7 @@ Keybindings in TUI:
   j / k               Move cursor up / down
   Space / Enter       Apply or remove override
   n                   Create new override
-  d                   Delete override
+  D                   Delete override
   r                   Rename override
   e                   Edit apply.md in $EDITOR
   E                   Edit override.yaml in $EDITOR
@@ -610,7 +610,7 @@ func (app *App) setupKeybindings() {
 			case 'n':
 				app.showNewOverrideInput()
 				return nil
-			case 'd':
+			case 'D':
 				app.showDeleteConfirmation()
 				return nil
 			case 'r':
@@ -948,7 +948,7 @@ func (app *App) updateContentAndInfo() {
 }
 
 func (app *App) updateStatusBar() {
-	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ d ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
+	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ D ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
 }
 
 // modal creates a centered modal overlay that shows the background through transparent areas
@@ -979,7 +979,7 @@ func (app *App) showHelp() {
 [green]Actions:[-]
   Space / Enter   Apply/Remove override
   n               New override
-  d               Delete override
+  D               Delete override
   r               Rename override
   e               Edit apply.md
   E               Edit override.yaml
