@@ -141,6 +141,8 @@ Keybindings in TUI:
   h / l               Previous / Next panel
   j / k               Move cursor up / down
   Space / Enter       Apply or remove override
+  e                   Edit apply.md in $EDITOR
+  E                   Edit override.yaml in $EDITOR
   ?                   Show help
   q / Esc             Quit`)
 		return
@@ -495,6 +497,12 @@ func (app *App) setupKeybindings() {
 			case '?':
 				app.showHelp()
 				return nil
+			case 'e':
+				app.openInEditor("apply.md")
+				return nil
+			case 'E':
+				app.openInEditor("override.yaml")
+				return nil
 			}
 		case tcell.KeyTab:
 			app.nextPanel()
@@ -623,6 +631,91 @@ func (app *App) toggleOverride() {
 			app.savePersistedState()
 			app.refreshAll()
 		}
+	}
+}
+
+func (app *App) openInEditor(filename string) {
+	selected := app.getSelectedOverride()
+	if selected == nil {
+		return
+	}
+
+	filePath := filepath.Join(selected.FolderPath, filename)
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return
+	}
+
+	// Get editor from environment, fall back to sensible defaults
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		// Try common editors
+		for _, e := range []string{"vim", "vi", "nano", "emacs"} {
+			if _, err := exec.LookPath(e); err == nil {
+				editor = e
+				break
+			}
+		}
+	}
+	if editor == "" {
+		return
+	}
+
+	// Suspend tview and run editor
+	app.app.Suspend(func() {
+		cmd := exec.Command(editor, filePath)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	})
+
+	// Reload the override content after editing
+	app.reloadOverride(selected.Name)
+	app.updateContentAndInfo()
+}
+
+func (app *App) reloadOverride(name string) {
+	for _, o := range app.overrides {
+		if o.Name != name {
+			continue
+		}
+
+		// Reload apply.md
+		applyPath := filepath.Join(o.FolderPath, "apply.md")
+		if content, err := os.ReadFile(applyPath); err == nil {
+			o.ApplyInfo = string(content)
+
+			// Re-parse frontmatter
+			contentStr := string(content)
+			if strings.HasPrefix(contentStr, "---") {
+				parts := strings.SplitN(contentStr[3:], "---", 2)
+				if len(parts) >= 1 {
+					var meta struct {
+						Type  string `yaml:"type"`
+						Block string `yaml:"block"`
+						File  string `yaml:"file"`
+					}
+					if err := yaml.Unmarshal([]byte(parts[0]), &meta); err == nil {
+						o.Type = meta.Type
+						o.Block = meta.Block
+						o.File = meta.File
+					}
+				}
+			}
+		}
+
+		// Reload override.yaml
+		overridePath := filepath.Join(o.FolderPath, "override.yaml")
+		if content, err := os.ReadFile(overridePath); err == nil {
+			o.Content = string(content)
+		}
+
+		break
 	}
 }
 
@@ -761,6 +854,8 @@ func (app *App) showHelp() {
 
 [green]Actions:[-]
   Space / Enter   Apply/Remove override
+  e               Edit apply.md
+  E               Edit override.yaml
   q               Quit
   ?               Show this help
 
