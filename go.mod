@@ -1,14 +1,16 @@
 module github.com/ramy/lazyhydra
 
-go 1.21
+go 1.22
 
 require (
+	github.com/alecthomas/chroma/v2 v2.23.1
 	github.com/gdamore/tcell/v2 v2.7.4
 	github.com/rivo/tview v0.0.0-20240625185742-b0a7293b8130
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect

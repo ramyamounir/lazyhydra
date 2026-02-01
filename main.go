@@ -10,6 +10,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"gopkg.in/yaml.v3"
@@ -63,6 +66,38 @@ func init() {
 	tview.Borders.TopRight = '╮'
 	tview.Borders.BottomLeft = '╰'
 	tview.Borders.BottomRight = '╯'
+}
+
+// highlightCode applies syntax highlighting to code using chroma
+func highlightCode(code, language string) string {
+	lexer := lexers.Get(language)
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	lexer = chroma.Coalesce(lexer)
+
+	style := styles.Get("gruvbox")
+	if style == nil {
+		style = styles.Fallback
+	}
+
+	var buf strings.Builder
+	iterator, err := lexer.Tokenise(nil, code)
+	if err != nil {
+		return tview.Escape(code)
+	}
+
+	for token := iterator(); token != chroma.EOF; token = iterator() {
+		entry := style.Get(token.Type)
+		text := tview.Escape(token.Value)
+		if entry.Colour.IsSet() {
+			r, g, b := entry.Colour.Red(), entry.Colour.Green(), entry.Colour.Blue()
+			buf.WriteString(fmt.Sprintf("[#%02x%02x%02x]%s[-]", r, g, b, text))
+		} else {
+			buf.WriteString(text)
+		}
+	}
+	return buf.String()
 }
 
 // Override represents a single Hydra override configuration
@@ -888,9 +923,9 @@ func (app *App) updateContentAndInfo() {
 	if selected == nil {
 		app.contentView.SetText("Select an override to view its content")
 	} else {
-		content := fmt.Sprintf("[cyan::b]# %s/override.yaml[-:-:-]\n\n%s", selected.Name, selected.Content)
+		content := fmt.Sprintf("[cyan::b]# %s/override.yaml[-:-:-]\n\n%s", selected.Name, highlightCode(selected.Content, "yaml"))
 		if selected.ApplyInfo != "" {
-			content += fmt.Sprintf("\n\n[yellow::b]# Apply Configuration[-:-:-]\n%s", selected.ApplyInfo)
+			content += fmt.Sprintf("\n\n[yellow::b]# Apply Configuration[-:-:-]\n%s", highlightCode(selected.ApplyInfo, "markdown"))
 		}
 		app.contentView.SetText(content)
 	}
