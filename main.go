@@ -22,7 +22,7 @@ const (
 )
 
 func init() {
-	// Set rounded borders globally (lazygit style)
+	// Set rounded borders globally
 	tview.Borders.Horizontal = '─'
 	tview.Borders.Vertical = '│'
 	tview.Borders.TopLeft = '╭'
@@ -77,7 +77,7 @@ func main() {
 
 	// Check for --help flag
 	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
-		fmt.Println(`LazyHydra - Lazygit-style TUI for managing Hydra CLI overrides
+		fmt.Println(`LazyHydra - Lazy-style TUI for managing Hydra CLI overrides
 
 Usage:
   lazyhydra           Launch the TUI
