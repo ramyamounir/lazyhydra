@@ -44,6 +44,7 @@ type App struct {
 	panels          []tview.Primitive
 	currentPanelIdx int
 	projectRoot     string
+	helpOpen        bool
 }
 
 func main() {
@@ -388,6 +389,15 @@ func (app *App) setupUI() {
 
 func (app *App) setupKeybindings() {
 	app.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// If help is open, close it on Escape or q
+		if app.helpOpen {
+			if event.Key() == tcell.KeyEsc || event.Rune() == 'q' {
+				app.closeHelp()
+				return nil
+			}
+			return event
+		}
+
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
@@ -664,8 +674,11 @@ func (app *App) updateStatusBar() {
 }
 
 func (app *App) showHelp() {
-	modal := tview.NewModal().
-		SetText(`[yellow]LazyHydra - Hydra Override Manager[-]
+	app.helpOpen = true
+
+	helpText := tview.NewTextView().
+		SetDynamicColors(true).
+		SetText(`[yellow::b]LazyHydra - Hydra Override Manager[-:-:-]
 
 [green]Navigation:[-]
   1, 2, 3         Jump to panel
@@ -675,7 +688,7 @@ func (app *App) showHelp() {
 
 [green]Actions:[-]
   Space / Enter   Apply/Remove override
-  q / Esc         Quit
+  q               Quit
   ?               Show this help
 
 [green]Persistence:[-]
@@ -684,17 +697,33 @@ func (app *App) showHelp() {
 
 [green]Environment Variables:[-]
   HYDRA_OVERRIDES     Encoded applied overrides
-  HYDRA_OVERRIDE_STR  Override string for CLI`).
-		AddButtons([]string{"Close"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			app.app.SetRoot(app.buildRootLayout(), true)
-			app.app.SetFocus(app.panels[app.currentPanelIdx])
-			app.updateBorderColors()
-		})
+  HYDRA_OVERRIDE_STR  Override string for CLI
 
-	modal.SetBackgroundColor(tcell.ColorDarkBlue)
+[darkgray]Press Escape or q to close[-]`)
 
-	app.app.SetRoot(modal, true)
+	helpText.SetBorder(true).
+		SetTitle(" Help ").
+		SetTitleAlign(tview.AlignCenter).
+		SetBorderColor(tcell.ColorGreen)
+
+	// Center the help box
+	flex := tview.NewFlex().
+		AddItem(nil, 0, 1, false).
+		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false).
+			AddItem(helpText, 22, 0, true).
+			AddItem(nil, 0, 1, false), 60, 0, true).
+		AddItem(nil, 0, 1, false)
+
+	app.app.SetRoot(flex, true)
+	app.app.SetFocus(helpText)
+}
+
+func (app *App) closeHelp() {
+	app.helpOpen = false
+	app.app.SetRoot(app.buildRootLayout(), true)
+	app.app.SetFocus(app.panels[app.currentPanelIdx])
+	app.updateBorderColors()
 }
 
 func (app *App) buildRootLayout() tview.Primitive {
