@@ -890,7 +890,7 @@ func (app *App) updateContentAndInfo() {
 }
 
 func (app *App) updateStatusBar() {
-	app.statusBar.SetText(" [1-3] panels  [space/enter] toggle  [n] new  [d] delete  [r] rename  [q] quit  [?] help")
+	app.statusBar.SetText(" [1-3] panels  [space/enter] toggle  [ n ] new  [ d ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
 }
 
 func (app *App) showHelp() {
