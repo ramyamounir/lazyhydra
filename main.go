@@ -85,7 +85,6 @@ type App struct {
 	applied           map[string]bool
 	availableList     *tview.List
 	appliedList       *tview.List
-	infoView          *tview.TextView
 	contentView       *tview.TextView
 	overrideStringView *tview.TextView
 	statusBar         *tview.TextView
@@ -401,15 +400,6 @@ func (app *App) setupUI() {
 		SetTitleAlign(tview.AlignLeft).
 		SetBorderColor(tcell.ColorDefault)
 
-	// Create Info view
-	app.infoView = tview.NewTextView().
-		SetDynamicColors(true).
-		SetWordWrap(true)
-	app.infoView.SetBorder(true).
-		SetTitle(" Info ").
-		SetTitleAlign(tview.AlignLeft).
-		SetBorderColor(tcell.ColorDefault)
-
 	// Create Content view
 	app.contentView = tview.NewTextView().
 		SetDynamicColors(true).
@@ -440,13 +430,12 @@ func (app *App) setupUI() {
 
 	// Left side panels (vertically stacked)
 	leftFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(app.availableList, 0, 3, true).
-		AddItem(app.appliedList, 0, 3, false).
-		AddItem(app.infoView, 0, 1, false)
+		AddItem(app.availableList, 0, 1, true).
+		AddItem(app.appliedList, 0, 1, false)
 
-	// Right side panels (vertically stacked: content, override string)
+	// Right side panels (vertically stacked)
 	rightFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(app.contentView, 0, 6, true).
+		AddItem(app.contentView, 0, 3, true).
 		AddItem(app.overrideStringView, 0, 1, false)
 
 	// Main layout (horizontal: left panels | right panels)
@@ -658,7 +647,6 @@ func (app *App) updateBorderColors() {
 	// Reset all borders to default
 	app.availableList.SetBorderColor(tcell.ColorDefault)
 	app.appliedList.SetBorderColor(tcell.ColorDefault)
-	app.infoView.SetBorderColor(tcell.ColorDefault)
 	app.contentView.SetBorderColor(tcell.ColorDefault)
 	app.overrideStringView.SetBorderColor(tcell.ColorDefault)
 
@@ -867,20 +855,6 @@ func (app *App) refreshAll() {
 
 func (app *App) updateContentAndInfo() {
 	selected := app.getSelectedOverride()
-
-	// Update info view
-	app.infoView.Clear()
-	if selected == nil {
-		app.infoView.SetText("No override selected")
-	} else {
-		status := "[red]Not applied[-]"
-		if app.applied[selected.Name] {
-			status = "[green]Applied[-]"
-		}
-		info := fmt.Sprintf("[yellow]Name:[-] %s\n[yellow]Type:[-] %s\n[yellow]Block:[-] %s\n[yellow]Status:[-] %s",
-			selected.Name, selected.Type, selected.Block, status)
-		app.infoView.SetText(info)
-	}
 
 	// Update override string view
 	overrideStr := app.buildOverrideString()
