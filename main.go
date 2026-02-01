@@ -286,10 +286,11 @@ func (app *App) savePersistedState() error {
 	if len(appliedNames) > 0 {
 		encoded := base64.StdEncoding.EncodeToString([]byte(strings.Join(appliedNames, ",")))
 		lines = append(lines, fmt.Sprintf("export %s=\"%s\"", envVarName, encoded))
-
-		overrideStr := app.buildOverrideString()
-		lines = append(lines, fmt.Sprintf("export HYDRA_OVERRIDE_STR=\"%s\"", overrideStr))
 	}
+
+	// Always write HYDRA_OVERRIDE_STR (empty string if no overrides)
+	overrideStr := app.buildOverrideString()
+	lines = append(lines, fmt.Sprintf("export HYDRA_OVERRIDE_STR=\"%s\"", overrideStr))
 
 	if err := os.WriteFile(envrcPath, []byte(strings.Join(lines, "\n")+"\n"), 0644); err != nil {
 		return err
@@ -309,16 +310,9 @@ func (app *App) buildOverrideString() string {
 			continue
 		}
 
-		prefix := "+"
-		if o.Type == "replace" {
-			prefix = ""
-		}
-
-		blockParts := strings.Split(o.Block, ".")
-		lastBlockPart := blockParts[len(blockParts)-1]
-
-		overrideStr := fmt.Sprintf("%sexperiment/config/%s@%s=%s",
-			prefix, lastBlockPart, o.Block, o.Name)
+		// Format: [type]overrides/[name]@[block]=override
+		overrideStr := fmt.Sprintf("%soverrides/%s@%s=override",
+			o.Type, o.Name, o.Block)
 		parts = append(parts, overrideStr)
 	}
 
