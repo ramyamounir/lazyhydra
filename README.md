@@ -162,6 +162,7 @@ lazyhydra
 | `J` / `K` | Scroll content view |
 | `Space` / `Enter` | Toggle override (apply or remove) |
 | `n` | Create new override |
+| `d` | Duplicate override (creates `[name]_copy`) |
 | `D` | Delete override (with confirmation) |
 | `r` | Rename override |
 | `e` | Edit `apply.md` in `$EDITOR` |

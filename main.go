@@ -184,6 +184,7 @@ Keybindings in TUI:
   j / k               Move cursor up / down
   Space / Enter       Apply or remove override
   n                   Create new override
+  d                   Duplicate override
   D                   Delete override
   r                   Rename override
   e                   Edit apply.md in $EDITOR
@@ -616,6 +617,9 @@ func (app *App) setupKeybindings() {
 			case 'r':
 				app.showRenameInput()
 				return nil
+			case 'd':
+				app.duplicateSelectedOverride()
+				return nil
 			}
 		case tcell.KeyTab:
 			app.nextPanel()
@@ -948,7 +952,7 @@ func (app *App) updateContentAndInfo() {
 }
 
 func (app *App) updateStatusBar() {
-	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ D ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
+	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ d ] duplicate  [ D ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
 }
 
 // modal creates a centered modal overlay that shows the background through transparent areas
@@ -979,6 +983,7 @@ func (app *App) showHelp() {
 [green]Actions:[-]
   Space / Enter   Apply/Remove override
   n               New override
+  d               Duplicate override
   D               Delete override
   r               Rename override
   e               Edit apply.md
@@ -1180,6 +1185,69 @@ func (app *App) renameSelectedOverride(newName string) {
 	// Save state and refresh
 	app.savePersistedState()
 	app.refreshAll()
+}
+
+func (app *App) duplicateSelectedOverride() {
+	selected := app.getSelectedOverride()
+	if selected == nil {
+		return
+	}
+
+	newName := selected.Name + "_copy"
+	newPath := filepath.Join(filepath.Dir(selected.FolderPath), newName)
+
+	// Copy the folder recursively
+	if err := copyDir(selected.FolderPath, newPath); err != nil {
+		return
+	}
+
+	// Create the new override in memory
+	newOverride := &Override{
+		Name:       newName,
+		Type:       selected.Type,
+		Block:      selected.Block,
+		File:       selected.File,
+		ModulePath: selected.ModulePath,
+		Module:     selected.Module,
+		Content:    selected.Content,
+		ApplyInfo:  selected.ApplyInfo,
+		FolderPath: newPath,
+	}
+	app.overrides = append(app.overrides, newOverride)
+
+	// Re-sort overrides
+	sort.Slice(app.overrides, func(i, j int) bool {
+		return app.overrides[i].Name < app.overrides[j].Name
+	})
+
+	app.refreshAll()
+}
+
+// copyDir recursively copies a directory
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Calculate the destination path
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		// Copy the file
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dstPath, data, info.Mode())
+	})
 }
 
 func (app *App) createNewOverride(name string) {
