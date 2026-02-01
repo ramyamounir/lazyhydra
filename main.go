@@ -864,6 +864,18 @@ func (app *App) updateContentAndInfo() {
 		app.infoView.SetText(info)
 	}
 
+	// Add override syntax to info panel
+	overrideStr := app.buildOverrideString()
+	if overrideStr != "" {
+		currentText := app.infoView.GetText(false)
+		app.infoView.SetText(currentText + "\n\n[white::b]Override String:[-:-:-]\n" + overrideStr)
+	} else if selected == nil {
+		app.infoView.SetText("No override selected\n\n[white::b]Override String:[-:-:-]\n(no overrides applied)")
+	} else {
+		currentText := app.infoView.GetText(false)
+		app.infoView.SetText(currentText + "\n\n[white::b]Override String:[-:-:-]\n(no overrides applied)")
+	}
+
 	// Update content view
 	app.contentView.Clear()
 	if selected == nil {
@@ -878,13 +890,7 @@ func (app *App) updateContentAndInfo() {
 }
 
 func (app *App) updateStatusBar() {
-	overrideStr := app.buildOverrideString()
-	if overrideStr == "" {
-		overrideStr = "(no overrides applied)"
-	}
-
-	status := fmt.Sprintf(" [yellow]Overrides:[-] %s [darkgray]| [1-3] panels  [space/enter] toggle  [n] new  [d] delete  [r] rename  [q] quit  [?] help[-]", overrideStr)
-	app.statusBar.SetText(status)
+	app.statusBar.SetText(" [1-3] panels  [space/enter] toggle  [n] new  [d] delete  [r] rename  [q] quit  [?] help")
 }
 
 func (app *App) showHelp() {
