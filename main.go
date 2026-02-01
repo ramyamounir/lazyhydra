@@ -189,6 +189,8 @@ Keybindings in TUI:
   r                   Rename override
   e                   Edit apply.md in $EDITOR
   E                   Edit override.yaml in $EDITOR
+  y                   Copy selected override string
+  Y                   Copy all override strings
   ?                   Show help
   q / Esc             Quit`)
 		return
@@ -405,23 +407,70 @@ func (app *App) buildOverrideString() string {
 			continue
 		}
 
-		// Use custom module_path/module if provided, otherwise use defaults
-		modulePath := o.ModulePath
-		if modulePath == "" {
-			modulePath = fmt.Sprintf("overrides/%s", o.Name)
-		}
-		module := o.Module
-		if module == "" {
-			module = "override"
-		}
-
-		// Format: [type][module_path]@[block]=[module]
-		overrideStr := fmt.Sprintf("%s%s@%s=%s",
-			o.Type, modulePath, o.Block, module)
-		parts = append(parts, overrideStr)
+		parts = append(parts, app.buildOverrideStringForOne(o))
 	}
 
 	return strings.Join(parts, "\n")
+}
+
+func (app *App) buildOverrideStringForOne(o *Override) string {
+	// Use custom module_path/module if provided, otherwise use defaults
+	modulePath := o.ModulePath
+	if modulePath == "" {
+		modulePath = fmt.Sprintf("overrides/%s", o.Name)
+	}
+	module := o.Module
+	if module == "" {
+		module = "override"
+	}
+
+	// Format: [type][module_path]@[block]=[module]
+	return fmt.Sprintf("%s%s@%s=%s", o.Type, modulePath, o.Block, module)
+}
+
+func copyToClipboard(text string) error {
+	// Try different clipboard commands in order of preference
+	clipboardCmds := []struct {
+		name string
+		args []string
+	}{
+		{"wl-copy", nil},                         // Wayland
+		{"xclip", []string{"-selection", "clipboard"}}, // X11
+		{"xsel", []string{"--clipboard", "--input"}},   // X11 alternative
+	}
+
+	for _, clip := range clipboardCmds {
+		path, err := exec.LookPath(clip.name)
+		if err != nil {
+			continue
+		}
+
+		cmd := exec.Command(path, clip.args...)
+		cmd.Stdin = strings.NewReader(text)
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no clipboard command available")
+}
+
+func (app *App) copySelectedOverrideString() {
+	selected := app.getSelectedOverride()
+	if selected == nil {
+		return
+	}
+
+	overrideStr := app.buildOverrideStringForOne(selected)
+	copyToClipboard(overrideStr)
+}
+
+func (app *App) copyAllOverrideStrings() {
+	overrideStr := strings.ReplaceAll(app.buildOverrideString(), "\n", " ")
+	if overrideStr == "" {
+		return
+	}
+	copyToClipboard(overrideStr)
 }
 
 func (app *App) setupUI() {
@@ -619,6 +668,12 @@ func (app *App) setupKeybindings() {
 				return nil
 			case 'd':
 				app.duplicateSelectedOverride()
+				return nil
+			case 'y':
+				app.copySelectedOverrideString()
+				return nil
+			case 'Y':
+				app.copyAllOverrideStrings()
 				return nil
 			}
 		case tcell.KeyTab:
@@ -952,7 +1007,7 @@ func (app *App) updateContentAndInfo() {
 }
 
 func (app *App) updateStatusBar() {
-	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ d ] duplicate  [ D ] delete  [ r ] rename  [ q ] quit  [ ? ] help")
+	app.statusBar.SetText(" [1-2] panels  [space/enter] toggle  [ n ] new  [ d ] duplicate  [ D ] delete  [ r ] rename  [ y/Y ] copy  [ q ] quit  [ ? ] help")
 }
 
 // modal creates a centered modal overlay that shows the background through transparent areas
@@ -988,6 +1043,8 @@ func (app *App) showHelp() {
   r               Rename override
   e               Edit apply.md
   E               Edit override.yaml
+  y               Copy selected override string
+  Y               Copy all override strings
   q               Quit
   ?               Show this help
 

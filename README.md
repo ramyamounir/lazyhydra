@@ -167,6 +167,8 @@ lazyhydra
 | `r` | Rename override |
 | `e` | Edit `apply.md` in `$EDITOR` |
 | `E` | Edit `override.yaml` in `$EDITOR` |
+| `y` | Copy selected override string to clipboard |
+| `Y` | Copy all applied override strings to clipboard |
 | `?` | Show help |
 | `q` / `Esc` | Quit |
 
