@@ -8,6 +8,7 @@ A terminal UI for managing [Hydra](https://hydra.cc/) configuration overrides, i
 
 - Browse available configuration overrides in an interactive TUI
 - Apply and remove overrides with keyboard shortcuts
+- Automatically symlink override configs into your Hydra config tree when applied
 - Persist selections to `.envrc` for automatic environment setup via [direnv](https://direnv.net/)
 - Generate override strings for Hydra CLI commands
 
@@ -35,7 +36,10 @@ Create a configuration file at `~/.config/lazyhydra/config.yaml`:
 env_var_name: HYDRA_OVERRIDES
 
 # Directory containing your override definitions
-overrides_dir: ~/myproject/conf/overrides
+overrides_dir: ~/.config/tbp/overrides
+
+# Root of your Hydra config tree (symlinks are created here)
+hydra_configs_dir: ~/myproject/conf
 
 # File where state is persisted (direnv format)
 project_env_file: .envrc
@@ -47,11 +51,12 @@ project_env_file: .envrc
 |--------|---------|-------------|
 | `env_var_name` | `HYDRA_OVERRIDES` | Environment variable that holds the override string |
 | `overrides_dir` | `$PROJECT_ROOT/conf/overrides` | Path to directory containing override folders |
+| `hydra_configs_dir` | `$PROJECT_ROOT/conf` | Root of the Hydra config tree where symlinks are created |
 | `project_env_file` | `.envrc` | File for persisting state (must be in direnv format) |
 
 **Variable substitution:**
 - `~/path` expands to your home directory
-- `$PROJECT_ROOT` expands to the `PROJECT_ROOT` environment variable, or the current working directory if unset
+- Environment variables like `$PROJECT_ROOT`, `$HOME`, etc. are expanded automatically
 
 ## Creating Overrides
 
@@ -66,11 +71,7 @@ overrides/
 
 ### apply.md
 
-The `apply.md` file uses YAML frontmatter to define how the override is applied. There are two ways to define overrides:
-
-#### Option 1: Custom Override (default)
-
-Use a local `override.yaml` file in the override folder:
+The `apply.md` file uses YAML frontmatter to define how the override is applied:
 
 ```markdown
 ---
@@ -81,43 +82,41 @@ block: "experiment.config.logging"
 Optional documentation about what this override does.
 ```
 
-This generates: `+overrides/my_override@experiment.config.logging=override`
-
-#### Option 2: Existing Module
-
-Reference an existing configuration module elsewhere in your conf directory:
-
-```markdown
----
-type: "+"
-block: "experiment.config.logging"
-module_path: "configs/logging"
-module: "debug"
----
-
-Uses the existing debug logging configuration.
-```
-
-This generates: `+configs/logging@experiment.config.logging=debug`
-
 **Frontmatter fields:**
 
 | Field | Description |
 |-------|-------------|
-| `type` | `"+"` for merge or `"="` for replace |
-| `block` | The Hydra config path where this override applies |
-| `module_path` | (Optional) Path to the config module. Defaults to `overrides/[name]` |
-| `module` | (Optional) Module name to use. Defaults to `override` |
+| `type` | `"+"` for merge or `"="` for replace. For value overrides (no `block`), use `"++"` or `"--"`. |
+| `block` | The Hydra config group path where this override applies (e.g., `experiment.config.logging`). Omit for value overrides. |
+
+When an override with a `block` is applied, LazyHydra creates a symlink from `override.yaml` into your Hydra config tree at `hydra_configs_dir/<block_as_path>/<name>_override.yaml`. For example, applying an override named `detailed_logging` with block `experiment.config.logging` creates:
+
+```
+<hydra_configs_dir>/experiment/config/logging/detailed_logging_override.yaml -> <overrides_dir>/detailed_logging/override.yaml
+```
+
+And generates the override string: `+experiment/config/logging=detailed_logging_override`
+
+#### Value overrides
+
+If `block` is omitted, the override is treated as a value override. The keys in `override.yaml` are flattened into `key=value` pairs:
+
+```markdown
+---
+type: "++"
+---
+```
+
+With an `override.yaml` of `{episodes: 3, model.hidden_size: 256}`, this generates: `++episodes=3 ++model.hidden_size=256`
 
 ### override.yaml
 
-The `override.yaml` file contains the actual configuration values. This file is only needed when using the default custom override approach (Option 1). When referencing an existing module with `module_path` and `module`, this file is not required.
+The `override.yaml` file contains the actual configuration values:
 
 ```yaml
 log_level: DEBUG
-handlers:
-  - ${class:myproject.handlers.DebugHandler}
-output_dir: ${path.expanduser:~/logs}
+log_to_file: true
+log_to_stderr: true
 ```
 
 ### Example
@@ -140,6 +139,8 @@ log_level: DEBUG
 log_to_file: true
 log_to_stderr: true
 ```
+
+When applied, this symlinks `override.yaml` into `<hydra_configs_dir>/experiment/config/logging/detailed_logging_override.yaml` and adds `+experiment/config/logging=detailed_logging_override` to the override string.
 
 ## Usage
 
