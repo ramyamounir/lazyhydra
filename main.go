@@ -20,17 +20,19 @@ import (
 
 // Config holds application configuration loaded from ~/.config/lazyhydra/config.yaml
 type Config struct {
-	EnvVarName     string `yaml:"env_var_name"`
-	OverridesDir   string `yaml:"overrides_dir"`
-	ProjectEnvFile string `yaml:"project_env_file"`
+	EnvVarName      string `yaml:"env_var_name"`
+	OverridesDir    string `yaml:"overrides_dir"`
+	HydraConfigsDir string `yaml:"hydra_configs_dir"`
+	ProjectEnvFile  string `yaml:"project_env_file"`
 }
 
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		EnvVarName:     "HYDRA_OVERRIDES",
-		OverridesDir:   "$PROJECT_ROOT/conf/overrides",
-		ProjectEnvFile: ".envrc",
+		EnvVarName:      "HYDRA_OVERRIDES",
+		OverridesDir:    "$PROJECT_ROOT/conf/overrides",
+		HydraConfigsDir: "$PROJECT_ROOT/conf",
+		ProjectEnvFile:  ".envrc",
 	}
 }
 
@@ -103,11 +105,8 @@ func highlightCode(code, language string) string {
 // Override represents a single Hydra override configuration
 type Override struct {
 	Name       string
-	Type       string // "merge" or "replace"
-	Block      string // e.g., "test.config.logging"
-	File       string // e.g., "override.yaml"
-	ModulePath string // e.g., "overrides/my_override" or "configs/logging" (optional, defaults to "overrides/[name]")
-	Module     string // e.g., "override" or "custom_module" (optional, defaults to "override")
+	Type       string // "+" or "="
+	Block      string // e.g., "experiment.config.logging"
 	Content    string // content of override.yaml
 	ApplyInfo  string // content of apply.md
 	FolderPath string // full path to override folder
@@ -158,6 +157,9 @@ func main() {
 	if err := app.loadPersistedState(); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not load persisted state: %v\n", err)
 	}
+
+	// Reconcile symlinks: ensure applied overrides have symlinks, remove stale ones
+	app.reconcileSymlinks()
 
 	// Check for --help flag
 	if len(os.Args) > 1 && (os.Args[1] == "--help" || os.Args[1] == "-h") {
@@ -240,13 +242,8 @@ func expandPath(path string) string {
 		home, _ := os.UserHomeDir()
 		return filepath.Join(home, path[2:])
 	}
-	if strings.HasPrefix(path, "$PROJECT_ROOT") {
-		root := os.Getenv("PROJECT_ROOT")
-		if root == "" {
-			root, _ = os.Getwd()
-		}
-		return filepath.Join(root, path[len("$PROJECT_ROOT"):])
-	}
+	// Expand environment variables (handles $VAR and ${VAR})
+	path = os.ExpandEnv(path)
 	return path
 }
 
@@ -283,18 +280,12 @@ func (app *App) loadOverrides() error {
 			parts := strings.SplitN(content[3:], "---", 2)
 			if len(parts) >= 1 {
 				var meta struct {
-					Type       string `yaml:"type"`
-					Block      string `yaml:"block"`
-					File       string `yaml:"file"`
-					ModulePath string `yaml:"module_path"`
-					Module     string `yaml:"module"`
+					Type  string `yaml:"type"`
+					Block string `yaml:"block"`
 				}
 				if err := yaml.Unmarshal([]byte(parts[0]), &meta); err == nil {
 					override.Type = meta.Type
 					override.Block = meta.Block
-					override.File = meta.File
-					override.ModulePath = meta.ModulePath
-					override.Module = meta.Module
 				}
 			}
 		}
@@ -414,18 +405,118 @@ func (app *App) buildOverrideString() string {
 }
 
 func (app *App) buildOverrideStringForOne(o *Override) string {
-	// Use custom module_path/module if provided, otherwise use defaults
-	modulePath := o.ModulePath
-	if modulePath == "" {
-		modulePath = fmt.Sprintf("overrides/%s", o.Name)
+	if o.Block == "" {
+		// Value override: flatten override.yaml into key=value pairs
+		// e.g., ++episodes=3 ++model.hidden_size=256
+		flat := flattenYAML(o.Content)
+		var parts []string
+		for _, kv := range flat {
+			parts = append(parts, fmt.Sprintf("%s%s=%s", o.Type, kv[0], kv[1]))
+		}
+		return strings.Join(parts, " ")
 	}
-	module := o.Module
-	if module == "" {
-		module = "override"
+	// Config group override: [type][block_as_path]=[name]_override
+	// e.g., +experiment/config/logging=detailed_logging_override
+	blockPath := strings.ReplaceAll(o.Block, ".", "/")
+	return fmt.Sprintf("%s%s=%s_override", o.Type, blockPath, o.Name)
+}
+
+// flattenYAML parses YAML content and returns a sorted list of [key, value] pairs
+// with nested keys joined by dots. E.g., {model: {hidden_size: 256}} -> [["model.hidden_size", "256"]]
+func flattenYAML(content string) [][2]string {
+	var data map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &data); err != nil {
+		return nil
 	}
 
-	// Format: [type][module_path]@[block]=[module]
-	return fmt.Sprintf("%s%s@%s=%s", o.Type, modulePath, o.Block, module)
+	var result [][2]string
+	flattenMap("", data, &result)
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i][0] < result[j][0]
+	})
+	return result
+}
+
+func flattenMap(prefix string, m map[string]interface{}, result *[][2]string) {
+	for k, v := range m {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		switch val := v.(type) {
+		case map[string]interface{}:
+			flattenMap(key, val, result)
+		default:
+			*result = append(*result, [2]string{key, fmt.Sprintf("%v", val)})
+		}
+	}
+}
+
+// symlinkPath returns the path where the symlink should be created for an override.
+// E.g., for block "experiment.config.logging" and name "detailed_logging",
+// returns: hydra_configs_dir/experiment/config/logging/detailed_logging_override.yaml
+func (app *App) symlinkPath(o *Override) string {
+	hydraDir := expandPath(app.config.HydraConfigsDir)
+	blockPath := strings.ReplaceAll(o.Block, ".", string(filepath.Separator))
+	return filepath.Join(hydraDir, blockPath, o.Name+"_override.yaml")
+}
+
+// linkOverride creates a symlink from the override's override.yaml into the Hydra configs tree.
+func (app *App) linkOverride(o *Override) error {
+	if o.Block == "" {
+		return nil
+	}
+
+	source := filepath.Join(o.FolderPath, "override.yaml")
+	linkPath := app.symlinkPath(o)
+
+	// Create intermediate directories
+	if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
+		return fmt.Errorf("creating symlink directory: %w", err)
+	}
+
+	// Remove existing symlink if present (idempotent)
+	if info, err := os.Lstat(linkPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			os.Remove(linkPath)
+		} else {
+			return fmt.Errorf("symlink path exists and is not a symlink: %s", linkPath)
+		}
+	}
+
+	return os.Symlink(source, linkPath)
+}
+
+// unlinkOverride removes the symlink for an override from the Hydra configs tree.
+func (app *App) unlinkOverride(o *Override) error {
+	if o.Block == "" {
+		return nil
+	}
+
+	linkPath := app.symlinkPath(o)
+
+	info, err := os.Lstat(linkPath)
+	if err != nil {
+		return nil // doesn't exist, nothing to do
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		return os.Remove(linkPath)
+	}
+
+	return nil
+}
+
+// reconcileSymlinks ensures symlinks match the persisted applied state.
+func (app *App) reconcileSymlinks() {
+	for _, o := range app.overrides {
+		if app.applied[o.Name] {
+			app.linkOverride(o)
+		} else {
+			app.unlinkOverride(o)
+		}
+	}
 }
 
 func copyToClipboard(text string) error {
@@ -800,6 +891,7 @@ func (app *App) toggleOverride() {
 		available := app.getAvailableOverrides()
 		if idx >= 0 && idx < len(available) {
 			override := available[idx]
+			app.linkOverride(override)
 			app.applied[override.Name] = true
 			app.savePersistedState()
 			app.refreshAll()
@@ -809,6 +901,7 @@ func (app *App) toggleOverride() {
 		applied := app.getAppliedOverrides()
 		if idx >= 0 && idx < len(applied) {
 			override := applied[idx]
+			app.unlinkOverride(override)
 			delete(app.applied, override.Name)
 			app.savePersistedState()
 			app.refreshAll()
@@ -880,12 +973,10 @@ func (app *App) reloadOverride(name string) {
 					var meta struct {
 						Type  string `yaml:"type"`
 						Block string `yaml:"block"`
-						File  string `yaml:"file"`
 					}
 					if err := yaml.Unmarshal([]byte(parts[0]), &meta); err == nil {
 						o.Type = meta.Type
 						o.Block = meta.Block
-						o.File = meta.File
 					}
 				}
 			}
@@ -895,6 +986,12 @@ func (app *App) reloadOverride(name string) {
 		overridePath := filepath.Join(o.FolderPath, "override.yaml")
 		if content, err := os.ReadFile(overridePath); err == nil {
 			o.Content = string(content)
+		}
+
+		// Re-reconcile symlink if override is applied (block may have changed)
+		if app.applied[o.Name] {
+			app.unlinkOverride(o)
+			app.linkOverride(o)
 		}
 
 		break
@@ -1149,6 +1246,9 @@ func (app *App) deleteSelectedOverride() {
 		return
 	}
 
+	// Remove symlink if it was applied
+	app.unlinkOverride(selected)
+
 	// Remove from applied if it was applied
 	delete(app.applied, selected.Name)
 
@@ -1218,9 +1318,19 @@ func (app *App) renameSelectedOverride(newName string) {
 	oldName := app.renameTarget.Name
 	oldPath := app.renameTarget.FolderPath
 	newPath := filepath.Join(filepath.Dir(oldPath), newName)
+	wasApplied := app.applied[oldName]
+
+	// Remove old symlink before renaming
+	if wasApplied {
+		app.unlinkOverride(app.renameTarget)
+	}
 
 	// Rename the folder on disk
 	if err := os.Rename(oldPath, newPath); err != nil {
+		// Re-link if rename failed
+		if wasApplied {
+			app.linkOverride(app.renameTarget)
+		}
 		return
 	}
 
@@ -1228,10 +1338,11 @@ func (app *App) renameSelectedOverride(newName string) {
 	app.renameTarget.Name = newName
 	app.renameTarget.FolderPath = newPath
 
-	// Update applied map if this override was applied
-	if app.applied[oldName] {
+	// Update applied map and re-create symlink with new name
+	if wasApplied {
 		delete(app.applied, oldName)
 		app.applied[newName] = true
+		app.linkOverride(app.renameTarget)
 	}
 
 	// Re-sort overrides
@@ -1263,9 +1374,6 @@ func (app *App) duplicateSelectedOverride() {
 		Name:       newName,
 		Type:       selected.Type,
 		Block:      selected.Block,
-		File:       selected.File,
-		ModulePath: selected.ModulePath,
-		Module:     selected.Module,
 		Content:    selected.Content,
 		ApplyInfo:  selected.ApplyInfo,
 		FolderPath: newPath,
