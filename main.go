@@ -18,7 +18,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds application configuration loaded from ~/.config/lazyhydra/config.yaml
+// configDir returns the lazyhydra configuration directory.
+// Priority: $LAZYHYDRA_CONFIG_DIR > $XDG_CONFIG_HOME/lazyhydra > ~/.config/lazyhydra
+func configDir() string {
+	if dir := os.Getenv("LAZYHYDRA_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, "lazyhydra")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".", ".config", "lazyhydra")
+	}
+	return filepath.Join(home, ".config", "lazyhydra")
+}
+
+// Config holds application configuration loaded from config.yaml
 type Config struct {
 	EnvVarName      string `yaml:"env_var_name"`
 	OverridesDir    string `yaml:"overrides_dir"`
@@ -37,12 +53,7 @@ func DefaultConfig() *Config {
 }
 
 func loadConfig() (*Config, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return DefaultConfig(), nil
-	}
-
-	configPath := filepath.Join(home, ".config", "lazyhydra", "config.yaml")
+	configPath := filepath.Join(configDir(), "config.yaml")
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {

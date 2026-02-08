@@ -29,7 +29,19 @@ This installs the `lazyhydra` binary to `~/.local/bin/`. Make sure this director
 
 ## Configuration
 
-Create a configuration file at `~/.config/lazyhydra/config.yaml`:
+LazyHydra looks for its configuration in the following locations (in order of priority):
+
+1. `$LAZYHYDRA_CONFIG_DIR/config.yaml`
+2. `$XDG_CONFIG_HOME/lazyhydra/config.yaml`
+3. `~/.config/lazyhydra/config.yaml`
+
+To set a custom config directory, add to your shell profile:
+
+```bash
+export LAZYHYDRA_CONFIG_DIR="$XDG_CONFIG_HOME/lazyhydra"
+```
+
+Create the configuration file:
 
 ```yaml
 # Environment variable name for storing the override string
